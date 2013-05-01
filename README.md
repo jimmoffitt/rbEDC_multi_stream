@@ -5,9 +5,9 @@ This is a Ruby script written to stream multiple data feeds (up to 6!) from an E
 
 HTTP streaming is based on the gnip-stream project at https://github.com/rweald/gnip-stream.
 
-EDC data streams can be configured in a configuration file.  Otherwise, there is a script method that can "discover" what streams are hosted on your EDC.  If you do not configure streams explicitly in your configuration file, the "discovery" method will be automatically triggered every time the script is launched.  
+EDC data streams can be specified in a configuration file.  Otherwise, there is a script method that can "discover" what streams are hosted on your EDC.  If you do not configure streams explicitly in your configuration file, the "discovery" method will be automatically triggered every time the script is launched.  
 
-Once the script is started, it creates a separate thread for each EDC data feed.  There is a separate thread that processes the compiled data and either writes out files or inserts into a database.
+Once the script is started, it creates a separate thread for each EDC data feed.  There is yet another thread that processes the collected data and either writes out files or inserts into a database.
 
 * Important note: this script is designed to process normalized Activity Streams (atom) data in XML.  
 
