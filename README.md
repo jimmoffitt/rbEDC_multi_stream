@@ -1,16 +1,15 @@
 Introduction
 ============
 
-This is a Ruby script written to retrieve data from a Enterprise Data Collector (EDC).  It illustrates the ability to stream data from an EDC instance.  This script can navigate EDC data streams and using the Activities API retrieve what data has been collected as individual activity files.  (Soon it will also be able to write those activities to a database.)
+This is a Ruby script written to stream multiple data feeds (up to 6!) from an Enterprise Data Collector (EDC). Retrieved data can be written to a local database or as individual activity files.
 
-EDC data streams can be configured in a script configuration file.  Otherwise, there is a script method that can "discover" what streams are hosted on your EDC.  If you do not configure streams explicitly in your configuration file, the "discovery" method will be automatically triggered.  If you do not specify data streams in the configuration file, this discovery process gets triggered every time the script is launched.  
+HTTP streaming is based on the gnip-stream project at https://github.com/rweald/gnip-stream.
 
-Once the script is started, it enters an endless "while true" loop, retrieving data on a user-specified interval (with a default of 60 seconds).   
+EDC data streams can be configured in a configuration file.  Otherwise, there is a script method that can "discover" what streams are hosted on your EDC.  If you do not configure streams explicitly in your configuration file, the "discovery" method will be automatically triggered every time the script is launched.  
 
-* Important note: this script is designed to process normalized Activity Streams (atom) data in XML.  As currently written it could easily be extended to retrieve data as flat-files in the Publisher's original format.  Stream configurations could be extended to include the appropriate Publisher original format (xml or json), then the "get data" end-point adjusted accordingly (../activities.json or ../activities.xml).  If writing data to a database, this extension to original format may get a bit more complicated.  The complication comes from mapping the original activity's elements to common database fields.
- 
+Once the script is started, it creates a separate thread for each EDC data feed.  There is a separate thread that processes the compiled data and either writes out files or inserts into a database.
 
-This script exercises the "since_date" parameter of the EDC Activities API.  When the script runs, it uses this parameter to only retrieve data since the last poll to the EDC datastore.  So it will only retrieve "fresh" data and not fetch data already retrieved in previous intervals.  Note that there is currently **no persistence of the "since_data" parameter between separate runs of the script.**  This means that the maximum number of activities will be retrieved with the script's first request (as subject to the Publisher's public API restrictions).  After that first request, the "since_date" parameter will be managed to only retrieve fresh data. The persistence of the "since_date" between script runs is left as a "user exercise." ;)
+* Important note: this script is designed to process normalized Activity Streams (atom) data in XML.  
 
 
 Usage
@@ -23,12 +22,12 @@ around the EDC_client class):
 file, for details):  -c "./EDC_Config.yaml"
 
 The EDC configuration file needs to have an "account" section and a "edc" section.  If you specify that
-you are using database (ddc --> storage: database) you will need to have a "database" section as well.
+you are using database (edc --> storage: database) you will need to have a "database" section as well.
 
 So, if you were running from a directory with this source file in it, with the configuration file in that folder too,
 the command-line would look like this:
 
-        $ruby ./EDC_client.rb -c "./EDC_Config.yaml"
+        $ruby ./EDC_client_multi_stream.rb -c "./EDC_Config.yaml"
 
 
 Configuration
@@ -44,10 +43,8 @@ Here are some important points:
 
 <p>
 + In the "edc" section, you can specify the following processing options:
-	+ poll_interval: interval in seconds between EDC polls for new data.  Default is every 60 seconds.
-	+ poll_max: The maximum number of activities to return from each request.
 	+ storage: "files" or "database".  How do you plan on storing the data? In flat files or in a database.
-		If you are storing as files, the filename is based on the native activity "id" and the extension indicates the 
+		If you are storing as files, the filename is based on the publisher and native activity "id" and the extension indicates the 
 		markup format (xml or json, although only xml is currently supported). 
 	+ out_box: If storing data in files, where do you want them written to?
 
