@@ -1,6 +1,5 @@
-
 '''
-The streaming HTTP module is based on https://github.com/rweald/gnip-stream.
+This streaming HTTP module is based on the gnip-stream project (https://github.com/rweald/gnip-stream).
 Code from that project was compiled within this one file, along with a few
 name-space refactoring.
 '''
