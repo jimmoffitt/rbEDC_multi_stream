@@ -7,12 +7,10 @@ configured in the EDC configuration file.
 
 Currently, this script only handles normalized Activity Stream (ATOM) data formatted in XML.
 
-TODO:
-    [] Add support for original format (JSON).
 
 '''
 
-require_relative "./http_stream"
+require_relative "./http_stream"  #based on gnip-stream project at (https://github.com/rweald/gnip-stream).
 require "base64"    #Used for basic password encryption.
 require "yaml"      #Used for configuration file management.
 require "nokogiri"  #Used for parsing activity XML.
@@ -177,6 +175,27 @@ class EDC_Client
         @streams
     end
 
+
+
+    def validateStream(url)
+        p "Validating stream at #{url}"
+
+        valid = true
+
+        #Update url to hit the api_help page
+
+        #Make HTTP Get request.
+        @http.url = url
+        response = @http.GET
+
+        if response.body.downcase.include?("not found") then #move on to the next test URL.
+            valid = false
+        end
+
+        valid
+    end
+
+
     '''
     Parses normalized Activity Stream XML.
     Parsing details here are driven by the current database schema used to store activities.
@@ -257,11 +276,15 @@ class EDC_Client
 
     #Stream threads are directed to here, which links to the stream 'consume' method...
     def consumeStream(stream)
-        stream[:feed].consume do |message|
+        begin
+            stream[:feed].consume do |message|
 
-            @activities << message #Add to end of array.
-            #p "Queueing #{@activities.length} activities..."
-            #puts "#{message}"
+                @activities << message #Add to end of array.
+                #p "Queueing #{@activities.length} activities..."
+                #puts "#{message}"
+            end
+        rescue
+            p "stop"
         end
     end
 
@@ -289,25 +312,39 @@ class EDC_Client
         #These streams all add to @activities via the consumeStream method.
         @streams.each do |stream|
 
-            #Spin up streaming URL for this EDC stream.
-            url = "https://#{@machine_name}.gnip.com/data_collectors/#{stream["ID"]}/stream.xml"
-            p url
+            #Validate stream
+            valid = validateStream("https://#{@machine_name}.gnip.com/data_collectors/#{stream["ID"]}/api_help")
 
-            #Create an EDC streaming instance for this stream.
-            stream[:feed] = EDCStream.new(url, @user_name, @password)
+            if valid then
+                #Spin up streaming URL for this EDC stream.
+                url = "https://#{@machine_name}.gnip.com/data_collectors/#{stream["ID"]}/stream.xml"
+                p url
 
-            t = Thread.new {Thread.pass; consumeStream(stream)}  #This thread hosts the consumeStream method.
+                #Create an EDC streaming instance for this stream.
+                exists = true
+                begin
+                    stream[:feed] = EDCStream.new(url, @user_name, @password)
+                rescue
+                    p "Can not connect to stream... Please check your configuration..."
+                    exists = false
+                end
 
-            #Start the thread, with some error handling.
-            begin
-                t.run
-            rescue ThreadError => e
-                p e.message
-            rescue
-                p "Error"
+
+                t = Thread.new {Thread.pass; consumeStream(stream)}  #This thread hosts the consumeStream method.
+
+                #Start the thread, with some error handling.
+                begin
+                    t.run
+                rescue ThreadError => e
+                    p e.message
+                rescue
+                    p "Error"
+                end
+
+                threads << t  #Add it to our pool (array) of threads.
+            else
+                p "#{stream["Name"]} with ID #{stream["ID"]} is NOT a valid stream. Please check configuration. "
             end
-
-            threads << t  #Add it to our pool (array) of threads.
         end
 
 
@@ -319,8 +356,6 @@ class EDC_Client
             t.run
         rescue ThreadError => e
             p e.message
-        rescue
-            p "Error"
         end
 
         threads << t #Add it to our pool (array) of threads.
@@ -330,14 +365,10 @@ class EDC_Client
                 t.join
             rescue ThreadError => e
                 p e.message
-            #rescue
-            #    p "Error"
-            end
+             end
         end
-
-    end
+   end
 end
-
 
 
 #=======================================================================================================================
@@ -474,14 +505,13 @@ class PtDatabase
         end
     end
 
-    #NativeID is defined as an integer.  This works for Twitter, but not for other publishers who use alphanumerics.
     #Tweet "id" field has this form: "tag:search.twitter.com,2005:198308769506136064"
     #This function parses out the numeric ID at end.
     def getTwitterNativeID(id)
         native_id = Integer(id.split(":")[-1])
     end
 
-    #Twitter uses UTC.
+    #Most publishers use UTC. Thankfully.
     def getPostedTime(time_stamp)
         time_stamp = Time.parse(time_stamp).strftime("%Y-%m-%d %H:%M:%S")
     end
